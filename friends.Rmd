@@ -1,0 +1,417 @@
+---
+title: "Friends"
+author: "Tharaa Haj Yahia & Ali Bishr"
+output: html_document
+---
+
+
+## {.tabset .tabset-fade}
+
+
+### The One With the Background and goals
+Background:  
+
+- The dataset we're working on was taken from the tidytuesday [repository](https://github.com/rfordatascience/tidytuesday/issues/254)
+
+- It provides basically transcripts from the American sitcom f.r.i.e.n.d.s, in addition to other information.
+
+- In order to work with this dataset we'll need to install the [friends R Package](https://github.com/EmilHvitfeldt/friends).
+
+
+Goals:  
+
+- Test the assumption that women talk more than men per episode. in order to do that we're willing on conducting a t-test.  
+
+- Find the relationship between IMDB rating for each episode and it's views in the USA. in order to do that we're willing to perform a linear regression.  
+  
+  
+### The One Where Chandler Manipulates the data
+Let's get started!  
+![](https://c.tenor.com/hRIocoioQMwAAAAC/friends-chandler-bing.gif)
+
+
+``` {r}
+#install.packages("friends")
+suppressWarnings(suppressMessages(library(tidyverse)))
+suppressWarnings(suppressMessages(library(friends)))
+
+```
+
+the `friends` library contains multiple datasets. we'll be working with two of them in order to perform the test were mentioned earlier.  
+the first dataset is `friends_info` which contains data about each episodes information. Basically we'll focus on `us_views_millions` and `imdb_rating`. here's a glimpse to the dataset:  
+
+```{r}
+glimpse(friends_info)
+
+```
+
+the second dataset is `friends` dataset. here's a glimpse of it:
+
+```{r}
+glimpse(friends)
+
+```
+
+We've some missing data in this dataset which we need to perform our t-test on words spoken by each character (Female or Male) per episode.  
+In order to mine the data we looked first of all for the main and top minor characters in the show. we chose top 38 characters (including the 6 main characters) who had the most lines in the show. The reason we had to do that is due to lack of data about the gender of each character in the dataset. we had these information from [The ceros interactive article](https://www.ceros.com/inspire/originals/friends-scripts-25th-anniversary-catchphrase-scenes-quotes/) in addition to the ordered data we obtained as who talks the most:
+
+```{r, message=FALSE, warning=FALSE}
+talks_the_most <- friends %>%
+  mutate(num_of_words = str_count(text, "\\S+")) %>%
+  select(speaker, season, episode, scene, num_of_words) %>%
+  group_by(speaker) %>%
+  summarise(num_of_words = sum(num_of_words)) %>%
+  arrange(desc(num_of_words))
+
+talks_the_most
+
+```
+
+Here's how we made our data tidy:  
+
+
+```{r}
+
+female_main_characters <- c("Phoebe Buffay", "Rachel Green", "Monica Geller")
+male_main_characters <- c("Chandler Bing", "Ross Geller", "Joey Tribbiani")
+main_characters <- c(female_main_characters, male_main_characters)
+
+
+#Top 15 minor male characters according to words spoken for the whole series
+
+male_minor_characters <- c("Paul Stevens",
+                           "David",
+                           "Tag Jones",
+                           "Gary",
+                           "Frank Buffay Jr.",
+                           "Gunther",
+                           "Eddie Menuek",
+                           "Richard Burke",
+                           "Doug",
+                           "Eric",
+                           "Leonard Green",
+                           "Mike",
+                           "Peter Becker",
+                           "Joshua Burgin",
+                           "Jack Geller")
+
+#Top 15 minor female characters according to words spoken for the whole series
+
+female_minor_characters <- c("Sandra Green",
+                             "Emily Waltham",
+                             "Charlie Wheeler",
+                             "Susan Bunch",
+                             "Judy Geller",
+                             "Carol Willick",
+                             "Janice Litman Goralnik",
+                             "Phoebe Abbott",
+                             "Mona",
+                             "Jill Green",
+                             "Kathy",
+                             "Janine Lecroix",
+                             "Amy Green",
+                             "Joanna",
+                             "Erica")
+
+male_characters <- c(male_minor_characters, male_main_characters)
+female_characters <- c(female_main_characters, female_minor_characters)
+characters <- c(female_characters, male_characters)
+
+
+## a tidy dataset for friends series
+
+tidy_friends <- friends %>%
+  filter(speaker %in% characters) %>%                                   #choose only main and top minor characters
+  mutate(num_of_words = str_count(text, "\\S+")) %>%                    #count the words spoken in each sentence
+  mutate(gender = ifelse(speaker %in% female_characters, "F", "M")) %>% #specify the gender of each character
+  select(speaker, season, episode, scene, num_of_words, gender)
+
+tidy_friends
+
+```
+
+further tidying will be done in future tests in the project.
+
+
+### The One With All the Visualizaion
+
+#### The distribution of number of words spoken by each gender per season
+
+```{r, message=FALSE, warning=FALSE}
+words_per_season <- tidy_friends %>%
+  filter(speaker %in% characters) %>%
+  mutate(season = factor(season)) %>%
+  group_by(speaker, season) %>%
+  summarise(num_of_words = sum(num_of_words))  %>%
+  mutate(gender = ifelse(speaker %in% female_characters, "F", "M"))
+
+words_per_season %>%
+  ggplot(aes(x = season, y = num_of_words, fill = gender)) +
+  geom_col() + 
+  labs(title = "How many words each gender spoke per season") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ylab("Number of words") + 
+  xlab("Season") + 
+  coord_flip()
+
+```
+
+This plot shows us multiple things:  
+
+- males and females share almost the same percentage of words spoken each season.  
+
+- at seasons 6 and 9 the characters just talked! a lot !!!.  
+
+- they calmed down at season 10 and scored the least amount of words spoken per season.
+
+
+#### Which character spoke the most in the show?  
+
+
+
+```{r}
+talks_the_most %>%
+  filter(speaker %in% characters) %>%
+  ggplot(aes(x = speaker, y =num_of_words)) + 
+  geom_col(aes(fill=speaker)) +
+  coord_flip() + 
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+  labs(y = "Number of words", title = "Who spoke the most?")
+
+```
+
+we can see that Rachel and Ross won the most talkative characters in the show. *well, maybe because of all the "we were on a break" thing*
+
+
+#### mean number of words spoken by each main character per episode
+
+```{r, message=FALSE, warning=FALSE}
+
+## words spoken per episodes by each character
+
+words_per_episode <- tidy_friends %>%
+  group_by(speaker, season, episode) %>%
+  summarise(num_of_words = sum(num_of_words))
+
+words_per_episode %>%
+  filter(speaker %in% main_characters) %>%
+  ggplot(aes(x = speaker, y = num_of_words)) + 
+  geom_boxplot(aes(fill=speaker)) + 
+  coord_flip() + 
+  labs(title = "distribution of words spoken per episode", y = "Number of words", x = "", subtitle = "among main characters") + 
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+```
+
+
+
+### The One with the t-test
+
+![](https://i.makeagif.com/media/7-11-2017/O_wsmW.gif)
+
+although we have the data about all of the population, we can't categorise each character to male or female since we have a huge number of speakers and the dataset doesn't specify their gender, so we don't know their mean or variance. That's why we're going to conduct a t-test for our sample.
+
+Let's define some variables:  
+
+$\mu_{f}$: mean of words spoken by female characters per episode  
+$\mu_{m}$: mean of words spoken by male characters per episode  
+
+our hypothesis is:  
+
+$H_0: \mu_{f} - \mu_{m} = 0$  
+$H_1: \mu_{f} - \mu_{m} > 0$
+
+
+Our Assumptions:  
+* Variance of number of words spoken by males and females are unequal (that doesn't really change anything in the t-test as we checked).  
+* number of words are normally distributed:  
+let's check on that.  
+
+```{r}
+
+words_per_episode %>%
+  ggplot(aes(num_of_words)) +
+  geom_density()
+
+
+```
+Since we can't say that they're normally distributed and they're limited by zero as minimum, we can ignore that since we have a large enough sample size.  
+
+```{r}
+# t-test for two unpaired samples
+
+words_per_episode_fm <- words_per_episode %>%
+  mutate(gender = ifelse(speaker %in% female_characters, "F", "M"))
+
+t.test(formula = words_per_episode_fm$num_of_words ~ words_per_episode_fm$gender, alternative = "greater", var.equal = FALSE)
+
+
+```
+
+we can see that we got a very high p-value = 0.6059 and it's higher than $\alpha = 0.05$. so we can't reject the Null Hypothesis and we can, in 95% confidence say that the mean of words spoken by males and females in FRIENDS series per episode are equal.
+
+
+
+
+### The One With the Linear Regression
+
+#### Gender as an indicator of words spoken per episode
+
+We will build a model that expresses the relationship (if there is) between the character's gender and words they speak per episode.
+
+![](https://media.giphy.com/media/3XtigW1mlKBW0/giphy.gif)  
+well, maybe not that kind of model
+
+
+```{r}
+
+words_per_episode %>%
+  mutate(gender = ifelse(speaker %in% female_characters, "F", "M")) %>%
+  lm(formula = num_of_words ~ gender) %>%
+  summary()
+
+```
+
+we notice that we can't significantly decide that there's a linear relation between the number of words spoken by each character per episode and the gender of the character (p-value = 0.788). 
+
+![](https://c.tenor.com/HOiOvDrBilkAAAAC/chandler-shut-up.gif)
+  
+
+
+#### views in USA as an indicator to IMDB rating per episode
+
+Let's check the first dataset `friends_info` in the `friends` package and see if there's a relationship between the `IMDB rating` and `views in USA`.
+
+at first let's have a visual indication:
+
+```{r}
+friends_info %>%
+  ggplot(mapping = aes(x = us_views_millions, y = imdb_rating)) +
+  geom_point() + 
+  theme_minimal()
+
+```
+
+There are 3 outliers, we'll remove them to have better indication.  
+
+```{r}
+friends_info <- friends_info %>%
+  filter(us_views_millions < 50)
+
+friends_info %>%
+  ggplot(mapping = aes(x = us_views_millions, y = imdb_rating)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+![](https://c.tenor.com/ED2g4lkO9qgAAAAC/friends-joey-tribbiani.gif)
+
+
+```{r}
+friends_info_lm <- friends_info %>%
+  lm(formula = imdb_rating ~ us_views_millions)
+
+friends_info_lm %>%
+  summary()
+```
+
+This regression model indicates that there's a linear relationship between the IMDB rating of each episode and the views in USA. the views predict (significantly, according to their p-value < 0.05 and f-statistic p-value < 0.05) the rating it will get in IMDB.  
+R-squared is 0.09217 which means that the variance of IMDB rating can be, by only 9.217%, explained by the variance of the views in USA.
+
+
+Let's express that relationship visually:
+
+```{r}
+
+friends_info %>%
+  ggplot(mapping = aes(x = us_views_millions, y = imdb_rating)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm")
+
+```
+
+our model indicates that:
+
+$rating = 7.691313 + 0.030419 \cdot views + \epsilon$
+which means every 1 million views can higher the rating for the episode by 0.030419.
+
+although, one of the base assumption in linear regression is that  
+$\epsilon \sim \mathcal{N}(0, \sigma_\epsilon)$  
+we'll check if our assumption is right.  
+
+
+```{r}
+
+qqnorm(friends_info_lm$residuals)
+qqline(friends_info_lm$residuals)
+
+```
+
+
+another assumption is homoscedacity.  
+let's also check that:  
+
+```{r}
+plot(friends_info_lm, which = c(1, 1))
+
+```
+
+we can see in the qqplot, the residuals are almost falling on the straight line, and in the in the Residuals vs Fitted values (in which the red line defines the variance of the residuals) that this line is almost straight. We can't say that the residuals $\epsilon$ are perfectly normally distributed (qqplot), and their variance are constant (Rsiduals vs Fitted).  
+But as said in the lectures we can ignore that and move on, and as Joey answered to Monica's question *"how can you not care?"*:  
+
+*like this*  
+![Joey doesn't care](https://37.media.tumblr.com/fc6ff6d721645c590426778557b02e55/tumblr_mzfxwl1rMW1tq4of6o1_250.gif)
+
+
+
+one thing to be aware of is that the rating for each episode is limited.
+
+### The One Where We Have Fun
+
+This section is just for fun.  
+Every fan of F.R.I.E.N.D.S memorizes all of the catch phrases told by each one of the characters, let's have fun with them.  
+
+#### Were Ross and Rachel or weren't "on a break"?  
+##### a quesion we'll never know it's answer
+
+```{r}
+
+friends %>%
+  mutate(on_a_break = str_detect(text, "on a break")) %>%
+  select(speaker, on_a_break) %>%
+  filter(on_a_break == TRUE) %>%
+  count(speaker) %>%
+  ggplot(aes(x = speaker, y = n)) +
+  geom_col(aes(fill=speaker)) +
+  coord_flip() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+  labs(title = "Who said `we were on a break` the most?", x = "")
+
+```
+
+
+Well, Ross's the one who made the mistake it's only logical he neede to defend himself.  
+
+
+#### The one with the catchphrases
+
+Which catcphrase was said the most?  
+let's see  
+
+
+
+```{r}
+friends %>%
+  mutate(on_a_break = str_detect(text, "on a break")) %>%
+  mutate(smelly_cat = str_detect(text, "smelly cat")) %>%
+  mutate(how_you_doin = str_detect(text, "how you doin")) %>%
+  select(on_a_break:how_you_doin) %>%
+  filter(smelly_cat == TRUE |
+           how_you_doin == TRUE |
+           on_a_break == TRUE) %>%
+  colSums()
+
+
+```
+
